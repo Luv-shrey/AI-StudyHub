@@ -58,19 +58,22 @@ app.post("/api/users", (req, res) => {
 
 
 
-app.post("/api/notes", async (req, res) => {
-    const { title, content } = req.body;
+app.post("/api/notes",authMiddleware, async (req, res) => {
+    const { title, content} = req.body;
+    const {userId} = req.user;
 
     if (!title || !content) {
         return res.status(400).json({
             message: "Title and content are required"
         });
     }
+    console.log("req.user:", req.user);
+console.log("userId:", userId);
 
     try {
         const result = await pool.query(
-            "INSERT INTO notes (title, content) VALUES ($1, $2) RETURNING *",
-            [title, content]
+            "INSERT INTO notes (title, content, user_id) VALUES ($1, $2, $3) RETURNING *",
+            [title, content, userId]
         );
 
         res.status(201).json({
@@ -89,10 +92,15 @@ app.post("/api/notes", async (req, res) => {
 
 
 
-app.get("/api/notes", async (req, res) => {
+app.get("/api/notes", authMiddleware, async (req, res) => {
+    const {userId} = req.user;
+
     try {
         const result = await pool.query(
-            "SELECT title, content FROM notes ORDER BY id ASC"
+            `SELECT title, content FROM notes
+            WHERE user_id = $1
+            ORDER BY id ASC`,
+            [userId]
         );
 
         res.status(200).json({
@@ -140,9 +148,10 @@ app.get("/api/notes/:id", async (req, res) => {
 
 
 
-app.put("/api/notes/:id", async (req, res) => {
+app.put("/api/notes/:id",authMiddleware, async (req, res) => {
     const { id } = req.params;
     const { title, content } = req.body;
+    const {userId} = req.user;
 
     if (!title || !content) {
         return res.status(400).json({
@@ -154,9 +163,9 @@ app.put("/api/notes/:id", async (req, res) => {
         const result = await pool.query(
             `UPDATE notes
              SET title = $1, content = $2
-             WHERE id = $3
+             WHERE id = $3 AND user_id = $4
              RETURNING *`,
-            [title, content, id]
+            [title, content, id, userId]
         );
 
         if (result.rows.length === 0) {
@@ -181,13 +190,14 @@ app.put("/api/notes/:id", async (req, res) => {
 
 
 
-app.delete("/api/notes/:id", async (req, res) => {
+app.delete("/api/notes/:id",authMiddleware, async (req, res) => {
     const { id } = req.params;
+    const {userId} = req.user;
 
     try {
         const result = await pool.query(
-            "DELETE FROM notes WHERE id = $1 RETURNING *",
-            [id]
+            "DELETE FROM notes WHERE id = $1 AND user_id = $2 RETURNING *",
+            [id, userId]
         );
 
         if (result.rows.length === 0) {
